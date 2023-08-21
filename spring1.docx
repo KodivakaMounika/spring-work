@@ -1,0 +1,76 @@
+
+import com.asana.Client;
+import com.asana.models.Webhook;
+import com.asana.models.Task;
+import com.asana.models.ResultBodyCollection;
+import com.airtable.Airtable;
+import com.airtable.Base;	
+import com.airtable.Table;
+import com.airtable.Record;
+
+public static final String ASANA_API_KEY = "your_asana_api_key";
+public static final String AIRTABLE_API_KEY = "your_airtable_api_key";
+public static final String ASANA_BASE_ID = "your_asana_base_id";
+public static final String AIRTABLE_BASE_ID = "your_airtable_base_id";
+public static final String ASANA_TABLE_NAME = "Asana Tasks";
+public static final String AIRTABLE_TABLE_NAME = "Asana Tasks";
+
+public static final String TASK_ID_COLUMN = "Task ID";
+public static final String NAME_COLUMN = "Name";
+public static final String ASSIGNEE_COLUMN = "Assignee";
+public static final String DUE_DATE_COLUMN = "Due Date";
+public static final String DESCRIPTION_COLUMN = "Description";
+
+class asanaClient implements runnable {
+
+Client asanaClient = Client.accessToken(ASANA_API_KEY);
+
+Base airtableBase = new Airtable(AIRTABLE_API_KEY).base(AIRTABLE_BASE_ID);
+
+Table<Record> airtableTable = airtableBase.table(AIRTABLE_TABLE_NAME, Record.class);
+
+}
+
+
+public static void createWebhook(String resourceId, String targetUrl) throws Exception {
+ 
+  Webhook webhook = new Webhook();
+  webhook.resource = resourceId;
+  webhook.target = targetUrl;
+
+  asanaClient.webhooks.create(webhook);
+}
+
+public static void handleWebhookEvents(String payload) throws Exception {
+
+  JSONObject payloadObject = new JSONObject(payload);
+
+  JSONArray eventsArray = payloadObject.getJSONArray("events");
+
+  for (int i = 0; i < eventsArray.length(); i++) {
+  
+    JSONObject eventObject = eventsArray.getJSONObject(i);
+
+ 
+    String action = eventObject.getString("action");
+    String resourceType = eventObject.getString("resource_type");
+    String resourceId = eventObject.getString("resource");
+
+
+ 
+    if (action.equals("added") && resourceType.equals("task")) {
+   
+      Task task = asanaClient.tasks.findById(resourceId).execute();
+
+      Record record = new Record();
+      record.put(TASK_ID_COLUMN, task.gid);
+      record.put(NAME_COLUMN, task.name);
+      record.put(ASSIGNEE_COLUMN, task.assignee != null ? task.assignee.name : null);
+      record.put(DUE_DATE_COLUMN, task.dueOn != null ? task.dueOn.toString() : null);
+      record.put(DESCRIPTION_COLUMN, task.notes);
+
+   
+      airtableTable.create(record);
+    }
+  }
+}
